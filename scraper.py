@@ -1,12 +1,13 @@
 import re
 from urllib.parse import urlparse, urldefrag, parse_qs, urljoin
+import urllib.robotparser
 from bs4 import BeautifulSoup
 from itertools import islice
 
 max_size_kb = 2000
 max_query_length = 100
 
-unique_links = set() # TODO: Add initial links
+unique_links = {}
 word_frequencies = {}
 longest_page = ("", 0)
 ics_subdomain_pages = {}
@@ -40,27 +41,36 @@ def extract_next_links(url, resp):
         
         soup = BeautifulSoup(resp.content, 'html.parser')
         links = []
+        # Process page to get page statistics
+        # https://realpython.com/python-web-scraping-practical-introduction/
+        text_content = soup.get_text()
+        words = text_content.split()
 
-        # TODO: Process page content for 1. statistics 2. avoid crawling very large files, especially if they have low information value
-        for link_tag in soup.find_all('a', href=True):
-            link = link_tag.get('href')
+        if len(words) > longest_page[1]:
+            longest_page[0] = url
+
+        for w in words:
+            word_frequencies[w] += 1
+
+                    
+        # TODO: Count subdomains with UNIQUE pages (count these after gathering all)
+        parsed = urlparse(url)
+        if parsed.netloc.endswith(".ics.uci.edu"):
+            ics_subdomain_pages[parsed.netloc] += 1
+        
+        # TODO: Avoid crawling very large files, especially if they have low information value
+
+        # https://medium.com/@spaw.co/extracting-all-links-using-beautifulsoup-in-python-a96786508659
+        for a_tag in soup.find_all('a', href=True):
+            extracted_url = a_tag.get('href')
 
             # Defragment the URL
-            link = urldefrag(link).url
-            
-            # Ensure the URL path has a trailing '/' for consistency
-            parsed = urlparse(link)
-            if not parsed.path.endswith('/'):
-                link = urljoin(link, '/')
+            extracted_url = urldefrag(extracted_url).url
 
-            # Avoid extracting the same link twice. Useful in case the same link appears multiple times in the page and to avoid crawler trap loops
-            if link not in unique_links:
-                links.append(link)
-                unique_links.add(link)
-            
-            # TODO: robot.txt and sitemaps
+            # Ensure the URL is absolute. Handles cases where URL may be relative by joining it with the base url
+            extracted_url = urljoin(url, extracted_url)
 
-            # TODO: Handle relative URLs
+            links.append(extracted_url)
 
         return links
     elif resp.status_code >= 300 and resp.status_code <= 399:
@@ -84,9 +94,12 @@ def is_valid(url):
         if parsed.scheme not in set(["http", "https"]):
             return False
         
-        # Check appropriate domain
-        if parsed.netloc not in ("ics.uci.edu", "cs.uci.edu", "informatics.uci.edu", "stat.uci.edu"):
-            return False
+        # Check appropriate root domain
+        valid_subdomain = False
+        for domain in ("ics.uci.edu", "cs.uci.edu", "informatics.uci.edu", "stat.uci.edu"):
+            if parsed.netloc.endswith("." + domain):
+                valid_subdomain = True
+        if not valid_subdomain: return False
         
         
         # Avoid links that could potentially have low information value: Query structure
@@ -147,18 +160,65 @@ def show_page_statistics():
         print(f"{key}, {value}")
 
 # TODO: Remove
-import requests
+# import requests
 
-url = 'https://ics.uci.edu/people/'
-reqs = requests.get(url)
+# url = 'https://ics.uci.edu/people/'
+# reqs = requests.get(url)
 
-links = extract_next_links(url, reqs)
-print(links)
-print()
+# links = extract_next_links(url, reqs)
+# print(links)
+# print()
 
-for l in links:
-    if is_valid(l):
-        print(l)
+# for l in links:
+#     if is_valid(l):
+#         print(l)
 
 # test_URL = "https://ics.uci.edu/people/?filter%5Bemployee_type%5D%5B0%5D=1096&filter%5Bemployee_type%5D%5B1%5D=1143&filter%5Bemployee_type%5D%5B2%5D=1097"
 # print(is_valid(test_URL))
+
+# import time
+
+# import urllib.robotparser
+
+# from utils.download import download
+# import requests
+# from utils import get_logger, get_urlhash, normalize
+
+# robots_txts = {} # The robots.txt content for each seed URL
+# user_agent_to_check = "INF"
+
+# def get_robots_txt_content(url):
+#         robots_url = url.rstrip("/") + "/robots.txt"
+#         print(robots_url)
+#         resp = requests.get(robots_url)
+
+#         if resp.status_code == 200:
+#            return resp.text
+#         return ""
+    
+# def can_fetch(url_to_check):
+#     parsed_url = urlparse(url_to_check)
+#     domain = parsed_url.netloc.replace("www.", "")
+
+#     if domain in robots_txts:
+#         robots_content = robots_txts[domain]
+#         rp = urllib.robotparser.RobotFileParser()
+#         rp.parse(robots_content.splitlines())
+#         return rp.can_fetch(user_agent_to_check, url_to_check)
+#     return False
+
+# for url in ["https://www.ics.uci.edu","https://www.cs.uci.edu/"]:# ,"https://www.informatics.uci.edu","https://www.stat.uci.edu"
+#     robots_content = get_robots_txt_content(url)
+#     print(robots_content)
+#     if (robots_content):    
+#         parsed_url = urlparse(url)
+#         domain = parsed_url.netloc.replace("www.", "")
+
+#         print("domain: " + domain)
+#         robots_txts[domain] = robots_content
+#     time.sleep(0.5)
+# print(robots_txts)
+
+# url_to_check = "https://ics.uci.edu/happening"
+# allowed = can_fetch(url_to_check)
+# print(f"'{user_agent_to_check}' {'is allowed' if allowed else 'is not allowed'} to fetch '{url_to_check}'")
