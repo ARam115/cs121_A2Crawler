@@ -9,13 +9,13 @@ import time
 import urllib.robotparser
 from urllib.parse import urlparse
 
-robots_txts = {} # The robots.txt content for each encountered domain/subdomain
-
 class Worker(Thread):
-    def __init__(self, worker_id, config, frontier):
+    def __init__(self, worker_id, config, frontier, crawl_stats):
         self.logger = get_logger(f"Worker-{worker_id}", "Worker")
         self.config = config
         self.frontier = frontier
+        self.robots_txts = {} # The robots.txt content for each encountered domain/subdomain
+        self.crawl_stats = crawl_stats
 
         # basic check for requests in scraper
         assert {getsource(scraper).find(req) for req in {"from requests import", "import requests"}} == {-1}, "Do not use requests in scraper.py"
@@ -36,15 +36,18 @@ class Worker(Thread):
             # Download robots.txt if domain/subdomain has not been seen yet
             parsed_url = urlparse(tbd_url)
             domain = parsed_url.netloc.replace("www.", "")
-            if domain not in robots_txts:
+            if domain not in self.robots_txts:
                 robots_content = self.get_robots_txt_content(parsed_url)
-                robots_txts[domain] = robots_content
+                self.robots_txts[domain] = robots_content
                 time.sleep(self.config.time_delay) # Add a delay for politeness
-
-            scraped_urls = scraper.scraper(tbd_url, resp)
+            
+            scraped_urls = scraper.scraper(tbd_url, resp, self.crawl_stats)
             for scraped_url in scraped_urls:
                 if self.can_fetch(scraped_url):
                     self.frontier.add_url(scraped_url)
+
+            self.crawl_stats.print_all_stats()
+                    
             self.frontier.mark_url_complete(tbd_url)
             time.sleep(self.config.time_delay) # Add a delay for politeness
 
@@ -61,8 +64,8 @@ class Worker(Thread):
         parsed_url = urlparse(url_to_check)
         domain = parsed_url.netloc.replace("www.", "")
 
-        if domain in robots_txts:
-            robots_content = robots_txts[domain]
+        if domain in self.robots_txts:
+            robots_content = self.robots_txts[domain]
             rp = urllib.robotparser.RobotFileParser()
             rp.parse(robots_content.splitlines())
             return rp.can_fetch(self.config.user_agent, url_to_check)

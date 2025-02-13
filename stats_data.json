@@ -1,0 +1,12 @@
+{
+    "total_urls": 4,
+    "longest_page": [
+        "",
+        0
+    ],
+    "word_frequencies": {},
+    "ics_subdomain_pages": {
+        "ics.uci.edu": 3,
+        "vision.ics.uci.edu": 1
+    }
+}

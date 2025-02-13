@@ -7,10 +7,13 @@ from queue import Queue, Empty
 from utils import get_logger, get_urlhash, normalize
 from scraper import is_valid
 
+from urllib.parse import urlparse
+
 class Frontier(object):
-    def __init__(self, config, restart):
+    def __init__(self, config, restart, crawl_stats):
         self.logger = get_logger("FRONTIER")
         self.config = config
+        self.crawlstats = crawl_stats
         self.to_be_downloaded = list()
         
         if not os.path.exists(self.config.save_file) and not restart:
@@ -37,7 +40,7 @@ class Frontier(object):
 
     def _parse_save_file(self):
         ''' This function can be overridden for alternate saving techniques. '''
-        total_count = len(self.save)
+        total_count = self.total_urls = len(self.save)
         tbd_count = 0
         for url, completed in self.save.values():
             if not completed and is_valid(url):
@@ -60,6 +63,10 @@ class Frontier(object):
             self.save[urlhash] = (url, False)
             self.save.sync()
             self.to_be_downloaded.append(url)
+
+            # Compute stats for this unique url
+            self.crawl_stats.compute_url_stats(url)
+
     
     def mark_url_complete(self, url):
         urlhash = get_urlhash(url)

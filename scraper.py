@@ -2,21 +2,16 @@ import re
 from urllib.parse import urlparse, urldefrag, parse_qs, urljoin
 import urllib.robotparser
 from bs4 import BeautifulSoup
-from itertools import islice
 
 max_size_kb = 2000
 max_query_length = 100
 
-unique_links = {}
-word_frequencies = {}
-longest_page = ("", 0)
-ics_subdomain_pages = {}
 
-def scraper(url, resp):
-    links = extract_next_links(url, resp)
-    return [link for link in links if is_valid(link)]
+def scraper(url, resp, crawl_stats):
+    links, page_content = extract_next_links(url, resp, crawl_stats)
+    return [link for link in links if is_valid(link)], page_content
 
-def extract_next_links(url, resp):
+def extract_next_links(url, resp, crawl_stats):
     # Implementation required.
     # url: the URL that was used to get the page
     # resp.url: the actual url of the page
@@ -44,19 +39,8 @@ def extract_next_links(url, resp):
         # Process page to get page statistics
         # https://realpython.com/python-web-scraping-practical-introduction/
         text_content = soup.get_text()
-        words = text_content.split()
-
-        if len(words) > longest_page[1]:
-            longest_page[0] = url
-
-        for w in words:
-            word_frequencies[w] += 1
-
-                    
-        # TODO: Count subdomains with UNIQUE pages (count these after gathering all)
-        parsed = urlparse(url)
-        if parsed.netloc.endswith(".ics.uci.edu"):
-            ics_subdomain_pages[parsed.netloc] += 1
+        # Compute page statistics
+        crawl_stats.compute_page_stats(url, text_content)
         
         # TODO: Avoid crawling very large files, especially if they have low information value
 
@@ -97,7 +81,7 @@ def is_valid(url):
         # Check appropriate root domain
         valid_subdomain = False
         for domain in ("ics.uci.edu", "cs.uci.edu", "informatics.uci.edu", "stat.uci.edu"):
-            if parsed.netloc.endswith("." + domain):
+            if parsed.netloc.endswith(domain):
                 valid_subdomain = True
         if not valid_subdomain: return False
         
@@ -132,32 +116,7 @@ def is_valid(url):
     except TypeError:
         print ("TypeError for ", parsed)
         raise
-
-def show_page_statistics():
-    # 1. Number of unique pages
-    print("Number of unique pages:", len(unique_links))
-    print()
-
-    # 2.
-    print(f"Longest page is {longest_page[0]} with {longest_page[1]} words")
-    print()
-
-    # 3. 50 most common words (ignoring English stop words) ordered with decreasing frequency
-    print("50 most common words:")
-    ordered_words = dict(sorted(word_frequencies.items(), key=lambda item: item[1]), reverse=True)
-    top_50_words = list(islice(ordered_words))
-    for word in top_50_words:
-        print(word)
-    print()
-
-    # 4.
-    print("Number of subdomains in ics.uci.edu:", len(ics_subdomain_pages))
-
-    sorted_keys = sorted(ics_subdomain_pages.keys()) # Sort subdomains alphabetically
-    ordered_subdomains = {key: ics_subdomain_pages[key] for key in sorted_keys}
-    # Show list of subdomains with number of unique pages as URL, number
-    for key, value in ordered_subdomains.items():
-        print(f"{key}, {value}")
+    
 
 # TODO: Remove
 # import requests
