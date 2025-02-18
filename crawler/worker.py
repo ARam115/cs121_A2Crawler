@@ -37,27 +37,26 @@ class Worker(Thread):
             parsed_url = urlparse(tbd_url)
             domain = parsed_url.netloc.replace("www.", "")
             if domain not in self.robots_txts:
+                time.sleep(self.config.time_delay) # Add a delay for politeness
                 robots_content = self.get_robots_txt_content(parsed_url)
                 self.robots_txts[domain] = robots_content
-                time.sleep(self.config.time_delay) # Add a delay for politeness
             
             scraped_urls = scraper.scraper(tbd_url, resp, self.crawl_stats)
             for scraped_url in scraped_urls:
                 if self.can_fetch(scraped_url):
                     self.frontier.add_url(scraped_url)
 
-            self.crawl_stats.print_all_stats()
-                    
             self.frontier.mark_url_complete(tbd_url)
             time.sleep(self.config.time_delay) # Add a delay for politeness
 
-    def get_robots_txt_content(self, url):
-        robots_url = url.rstrip("/") + "/robots.txt"
+    def get_robots_txt_content(self, parsed_url):
+        robots_url = parsed_url.scheme + "://" + parsed_url.netloc + "/robots.txt"
         print(robots_url)
         resp = download(robots_url, self.config, self.logger)
 
-        if resp.status_code == 200:
-           return resp.text
+        if resp.status == 200:
+            print(resp.raw_response.text)
+            return resp.raw_response.text
         return ""
     
     def can_fetch(self, url_to_check):

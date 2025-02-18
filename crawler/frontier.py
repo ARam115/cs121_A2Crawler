@@ -13,7 +13,7 @@ class Frontier(object):
     def __init__(self, config, restart, crawl_stats):
         self.logger = get_logger("FRONTIER")
         self.config = config
-        self.crawlstats = crawl_stats
+        self.crawl_stats = crawl_stats
         self.to_be_downloaded = list()
         
         if not os.path.exists(self.config.save_file) and not restart:
@@ -52,7 +52,7 @@ class Frontier(object):
 
     def get_tbd_url(self):
         try:
-            return self.to_be_downloaded.pop()
+            return self.to_be_downloaded.pop(0)
         except IndexError:
             return None
 

@@ -32,7 +32,7 @@ class Crawl_Stats():
       # Check whether the url has a subdomain of the ics.uci.edu domain
       parsed = urlparse(url)
       subdomain = parsed.netloc.replace("www.", "")
-      if subdomain.endswith("ics.uci.edu"):
+      if subdomain.endswith(".ics.uci.edu"):
           # Update number of pages found for the subdomain
           if subdomain not in self.stats["ics_subdomain_pages"].keys():
               self.stats["ics_subdomain_pages"][subdomain] = 0
@@ -110,12 +110,7 @@ class Crawl_Stats():
       self.print_ics_subdomains()
 
 def main():
-    crawl_stats = Crawl_Stats(True)
-    # crawl_stats.compute_page_stats("url", "can't How many unique pages did you find? Uniqueness for the purposes of this assignment is ONLY established by the URL, but discarding the fragment part. So, for example, http://www.ics.uci.edu#aaa and http://www.ics.uci.edu#bbb are the same URL. Even if you implement additional methods for textual similarity detection, please keep considering the above definition of unique pages for the purposes of counting the unique pages in this assignment.")
-    crawl_stats.compute_url_stats("https://ics.uci.edu/people/")
-    crawl_stats.compute_url_stats("https://www.ics.uci.edu")
-    crawl_stats.compute_url_stats("https://ics.uci.edu/")
-    crawl_stats.compute_url_stats("http://vision.ics.uci.edu")
+    crawl_stats = Crawl_Stats(False)
     crawl_stats.print_all_stats()
 
 if __name__ == "__main__":

@@ -6,10 +6,12 @@ from bs4 import BeautifulSoup
 max_size_kb = 2000
 max_query_length = 100
 
+valid_domains = ["ics.uci.edu", "cs.uci.edu", "informatics.uci.edu", "stat.uci.edu"]
+paths_to_avoid = ["events", "event", "tag"]
 
 def scraper(url, resp, crawl_stats):
-    links, page_content = extract_next_links(url, resp, crawl_stats)
-    return [link for link in links if is_valid(link)], page_content
+    links = extract_next_links(url, resp, crawl_stats)
+    return [link for link in links if is_valid(link)]
 
 def extract_next_links(url, resp, crawl_stats):
     # Implementation required.
@@ -21,30 +23,39 @@ def extract_next_links(url, resp, crawl_stats):
     #         resp.raw_response.url: the url, again
     #         resp.raw_response.content: the content of the page!
     # Return a list with the hyperlinks (as strings) scrapped from resp.raw_response.content
-    if resp.status_code >= 200 and resp.status_code <= 299:
+    if resp.status >= 200 and resp.status <= 299:
         # Successful request
         # Check content is not empty
-        if not resp.content:
+        if not resp.raw_response.content:
             return list()
         
-        # Avoid very large files
-        size_kb = len(resp.content) / 1024
+        # Avoid crawling very large files
+        size_kb = len(resp.raw_response.content) / 1024
         if (size_kb > max_size_kb):
             return list()
         
-        # TODO: Avoid pages with low information value
+        # Avoid pages with low information value:
+        # Avoid further crawling instructor/course links (ics domain and path starts with ~)
+        # e.g. http://www.ics.uci.edu/~eppstein/
+        try:
+            parsed = urlparse(url)
+            domain = parsed.netloc.replace("www.", "")
+            print(parsed.path)
+            if domain == "ics.uci.edu" and parsed.path.startswith("/~"):
+                return list()
+        except TypeError:
+            print ("TypeError for ", parsed)
+            raise
         
-        soup = BeautifulSoup(resp.content, 'html.parser')
+        soup = BeautifulSoup(resp.raw_response.content, 'html.parser')
         links = []
         # Process page to get page statistics
-        # https://realpython.com/python-web-scraping-practical-introduction/
+        # Source: https://realpython.com/python-web-scraping-practical-introduction/
         text_content = soup.get_text()
         # Compute page statistics
         crawl_stats.compute_page_stats(url, text_content)
         
-        # TODO: Avoid crawling very large files, especially if they have low information value
-
-        # https://medium.com/@spaw.co/extracting-all-links-using-beautifulsoup-in-python-a96786508659
+        # Source: https://medium.com/@spaw.co/extracting-all-links-using-beautifulsoup-in-python-a96786508659
         for a_tag in soup.find_all('a', href=True):
             extracted_url = a_tag.get('href')
 
@@ -57,11 +68,11 @@ def extract_next_links(url, resp, crawl_stats):
             links.append(extracted_url)
 
         return links
-    elif resp.status_code >= 300 and resp.status_code <= 399:
-        # TODO: Detect redirects
-        pass
+    elif resp.status >= 300 and resp.status <= 399:
+        # Redirects
+        print(resp.error)
     elif resp.status >= 400 and resp.status <= 599:
-        print(resp.raw_response.content)
+        print(resp.error)
     elif resp.status >= 600 and resp.status <= 606:
         # Caching specific error. Your crawler is doing something it shouldn't!
         print(resp.error)
@@ -80,12 +91,25 @@ def is_valid(url):
         
         # Check appropriate root domain
         valid_subdomain = False
-        for domain in ("ics.uci.edu", "cs.uci.edu", "informatics.uci.edu", "stat.uci.edu"):
+        for domain in valid_domains:
             if parsed.netloc.endswith(domain):
                 valid_subdomain = True
         if not valid_subdomain: return False
         
-        
+        # Avoid crawler traps
+        # 1. Avoid calendars and pages with events. Examples:
+        #   https://ics.uci.edu/events/
+        #   https://ics.uci.edu/event/...
+        #   https://ics.uci.edu/tag/...
+        #   https://ics.uci.edu/seminar-series/
+        #   https://www.informatics.uci.edu/explore/department-seminars/
+        #   https://www.stat.uci.edu/seminar-series/
+        #   https://cs.ics.uci.edu/seminar-series/
+        url_path = parsed.path.strip("/")
+        for p in paths_to_avoid:
+            if url_path.startswith(p):
+                return False
+
         # Avoid links that could potentially have low information value: Query structure
         query_string = parsed.query
         if query_string:
@@ -100,84 +124,32 @@ def is_valid(url):
                 for ignore_param in ("filter", "limit", "order", "sort"):
                     if param.startswith(ignore_param):
                         return False
-                
-
+        
         # Filter out non-webpage extensions
         return not re.match(
             r".*\.(css|js|bmp|gif|jpe?g|ico"
-            + r"|png|tiff?|mid|mp2|mp3|mp4"
+            + r"|png|tiff?|mid|mp2|mp3|mp4|lif|rle"
             + r"|wav|avi|mov|mpeg|ram|m4v|mkv|ogg|ogv|pdf"
-            + r"|ps|eps|tex|ppt|pptx|doc|docx|xls|xlsx|names"
+            + r"|ps|eps|tex|ppt|pptx|ppsx|doc|docx|xls|xlsx|names"
             + r"|data|dat|exe|bz2|tar|msi|bin|7z|psd|dmg|iso"
             + r"|epub|dll|cnf|tgz|sha1"
             + r"|thmx|mso|arff|rtf|jar|csv"
+            + r"|java|php|py|txt"
             + r"|rm|smil|wmv|swf|wma|zip|rar|gz)$", parsed.path.lower())
 
     except TypeError:
         print ("TypeError for ", parsed)
         raise
-    
 
-# TODO: Remove
-# import requests
+# url = "http://www.ics.uci.edu/~eppstein/pix/pal/water/index.html"
+# try:
+#     parsed = urlparse(url)
+#     domain = parsed.netloc.replace("www.", "")
+#     print(parsed.path)
+#     if domain == "ics.uci.edu" and parsed.path.startswith("/~"):
+#         print("don't crawl")
+# except TypeError:
+#     print ("TypeError for ", parsed)
+#     raise
 
-# url = 'https://ics.uci.edu/people/'
-# reqs = requests.get(url)
-
-# links = extract_next_links(url, reqs)
-# print(links)
-# print()
-
-# for l in links:
-#     if is_valid(l):
-#         print(l)
-
-# test_URL = "https://ics.uci.edu/people/?filter%5Bemployee_type%5D%5B0%5D=1096&filter%5Bemployee_type%5D%5B1%5D=1143&filter%5Bemployee_type%5D%5B2%5D=1097"
-# print(is_valid(test_URL))
-
-# import time
-
-# import urllib.robotparser
-
-# from utils.download import download
-# import requests
-# from utils import get_logger, get_urlhash, normalize
-
-# robots_txts = {} # The robots.txt content for each seed URL
-# user_agent_to_check = "INF"
-
-# def get_robots_txt_content(url):
-#         robots_url = url.rstrip("/") + "/robots.txt"
-#         print(robots_url)
-#         resp = requests.get(robots_url)
-
-#         if resp.status_code == 200:
-#            return resp.text
-#         return ""
-    
-# def can_fetch(url_to_check):
-#     parsed_url = urlparse(url_to_check)
-#     domain = parsed_url.netloc.replace("www.", "")
-
-#     if domain in robots_txts:
-#         robots_content = robots_txts[domain]
-#         rp = urllib.robotparser.RobotFileParser()
-#         rp.parse(robots_content.splitlines())
-#         return rp.can_fetch(user_agent_to_check, url_to_check)
-#     return False
-
-# for url in ["https://www.ics.uci.edu","https://www.cs.uci.edu/"]:# ,"https://www.informatics.uci.edu","https://www.stat.uci.edu"
-#     robots_content = get_robots_txt_content(url)
-#     print(robots_content)
-#     if (robots_content):    
-#         parsed_url = urlparse(url)
-#         domain = parsed_url.netloc.replace("www.", "")
-
-#         print("domain: " + domain)
-#         robots_txts[domain] = robots_content
-#     time.sleep(0.5)
-# print(robots_txts)
-
-# url_to_check = "https://ics.uci.edu/happening"
-# allowed = can_fetch(url_to_check)
-# print(f"'{user_agent_to_check}' {'is allowed' if allowed else 'is not allowed'} to fetch '{url_to_check}'")
+print(is_valid("https://oai.ics.uci.edu/"))
