@@ -10,7 +10,7 @@ from scraper import is_valid
 from urllib.parse import urlparse
 
 class Frontier(object):
-    def __init__(self, config, restart, crawl_stats):
+    def __init__(self, config, restart, crawl_stats=None):
         self.logger = get_logger("FRONTIER")
         self.config = config
         self.crawl_stats = crawl_stats
@@ -65,7 +65,8 @@ class Frontier(object):
             self.to_be_downloaded.append(url)
 
             # Compute stats for this unique url
-            self.crawl_stats.compute_url_stats(url)
+            if self.crawl_stats is not None:
+                self.crawl_stats.compute_url_stats(url)
 
     
     def mark_url_complete(self, url):

@@ -1,7 +1,7 @@
 from utils import get_logger
 from crawler.frontier import Frontier
 from crawler.worker import Worker
-from crawler.crawl_stats import Crawl_Stats
+from crawl_stats import Crawl_Stats
 
 class Crawler(object):
     def __init__(self, config, restart, frontier_factory=Frontier, worker_factory=Worker):

@@ -10,7 +10,7 @@ import urllib.robotparser
 from urllib.parse import urlparse
 
 class Worker(Thread):
-    def __init__(self, worker_id, config, frontier, crawl_stats):
+    def __init__(self, worker_id, config, frontier, crawl_stats=None):
         self.logger = get_logger(f"Worker-{worker_id}", "Worker")
         self.config = config
         self.frontier = frontier
@@ -68,4 +68,4 @@ class Worker(Thread):
             rp = urllib.robotparser.RobotFileParser()
             rp.parse(robots_content.splitlines())
             return rp.can_fetch(self.config.user_agent, url_to_check)
-        return False
+        return True
